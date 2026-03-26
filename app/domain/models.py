@@ -6,6 +6,7 @@ class Player:
     id: int
     name: str
     role: str
+    number: int | None
     active: bool
 
 

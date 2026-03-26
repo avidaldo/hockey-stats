@@ -9,7 +9,13 @@ from app.domain.services import calculate_save_percentage
 
 
 class PlayerRepository(Protocol):
-    def add_player(self, name: str, role: str) -> int:
+    def add_player(self, name: str, role: str, number: int | None = None) -> int:
+        ...
+
+    def update_player(self, player_id: int, name: str, role: str, number: int | None) -> None:
+        ...
+
+    def get_player(self, player_id: int) -> Player | None:
         ...
 
     def remove_player(self, player_id: int) -> None:
@@ -23,6 +29,7 @@ class GameRepository(Protocol):
     def record_game(
         self,
         season_label: str,
+        season_type: str,
         game_date: str,
         opponent: str,
         result: str,
@@ -32,7 +39,23 @@ class GameRepository(Protocol):
     ) -> int:
         ...
 
-    def get_season_summary(self, season_label: str) -> "SeasonSummary":
+    def update_game(
+        self,
+        game_id: int,
+        result: str,
+        notes: str,
+        skater_stats: list[SkaterGameStatInput],
+        goalie_stats: list[GoalieGameStatInput],
+    ) -> None:
+        ...
+
+    def list_games(self, season_label: str, season_type: str | None = None) -> list[dict]:
+        ...
+
+    def get_game_stats(self, game_id: int) -> dict:
+        ...
+
+    def get_season_summary(self, season_label: str, season_type: str | None = None) -> "SeasonSummary":
         ...
 
 
@@ -61,9 +84,10 @@ class GoalieSummaryRow(TypedDict):
 
 class SeasonSummary(TypedDict):
     season: str
+    season_type: str
     team: TeamSummary
     skaters: list[SkaterSummaryRow]
-    goalkeepers: list[GoalieSummaryRow]
+    goalies: list[GoalieSummaryRow]
 
 
 class MailingListRepository(Protocol):
@@ -95,14 +119,26 @@ class HockeyService:
     sender: EmailSender
     email_logs: EmailLogRepository
 
-    def add_player(self, name: str, role: str) -> int:
+    def add_player(self, name: str, role: str, number: int | None = None) -> int:
         normalized_name = name.strip()
         normalized_role = role.strip().lower()
         if not normalized_name:
             raise ValueError("Player name is required")
-        if normalized_role not in {"skater", "goalkeeper"}:
-            raise ValueError("Role must be 'skater' or 'goalkeeper'")
-        return self.players.add_player(normalized_name, normalized_role)
+        if normalized_role not in {"skater", "goalie"}:
+            raise ValueError("Role must be 'skater' or 'goalie'")
+        return self.players.add_player(normalized_name, normalized_role, number)
+
+    def update_player(self, player_id: int, name: str, role: str, number: int | None) -> None:
+        normalized_name = name.strip()
+        normalized_role = role.strip().lower()
+        if not normalized_name:
+            raise ValueError("Player name is required")
+        if normalized_role not in {"skater", "goalie"}:
+            raise ValueError("Role must be 'skater' or 'goalie'")
+        self.players.update_player(player_id, normalized_name, normalized_role, number)
+
+    def get_player(self, player_id: int) -> Player | None:
+        return self.players.get_player(player_id)
 
     def remove_player(self, player_id: int) -> None:
         self.players.remove_player(player_id)
@@ -128,12 +164,14 @@ class HockeyService:
     def record_game_stats(
         self,
         season_label: str,
+        season_type: str,
         game_date: str,
         opponent: str,
         result: str,
         notes: str,
         skater_stats: list[SkaterGameStatInput],
         goalie_stats: list[GoalieGameStatInput],
+        auto_send_email: bool = True,
     ) -> int:
         if not season_label.strip():
             raise ValueError("Season label is required")
@@ -141,6 +179,8 @@ class HockeyService:
             raise ValueError("Opponent is required")
         if result not in {"win", "loss"}:
             raise ValueError("Result must be 'win' or 'loss'")
+        if season_type not in {"regular", "playoff"}:
+            raise ValueError("Season type must be 'regular' or 'playoff'")
         dt.date.fromisoformat(game_date)
 
         if not skater_stats and not goalie_stats:
@@ -148,8 +188,9 @@ class HockeyService:
 
         self._validate_stat_lines(skater_stats, goalie_stats)
 
-        return self.games.record_game(
+        game_id = self.games.record_game(
             season_label=season_label.strip(),
+            season_type=season_type,
             game_date=game_date,
             opponent=opponent.strip(),
             result=result,
@@ -158,21 +199,62 @@ class HockeyService:
             goalie_stats=goalie_stats,
         )
 
-    def get_season_stats(self, season_label: str) -> SeasonSummary:
-        raw = self.games.get_season_summary(season_label.strip())
+        # Auto-send email after saving game
+        if auto_send_email:
+            try:
+                self.send_season_stats_email(season_label, season_type)
+            except ValueError:
+                # No recipients configured, skip email
+                pass
 
-        for goalie in raw["goalkeepers"]:
+        return game_id
+
+    def update_game_stats(
+        self,
+        game_id: int,
+        result: str,
+        notes: str,
+        skater_stats: list[SkaterGameStatInput],
+        goalie_stats: list[GoalieGameStatInput],
+    ) -> None:
+        if result not in {"win", "loss"}:
+            raise ValueError("Result must be 'win' or 'loss'")
+
+        if not skater_stats and not goalie_stats:
+            raise ValueError("At least one stat line is required")
+
+        self._validate_stat_lines(skater_stats, goalie_stats)
+
+        self.games.update_game(
+            game_id=game_id,
+            result=result,
+            notes=notes.strip(),
+            skater_stats=skater_stats,
+            goalie_stats=goalie_stats,
+        )
+
+    def list_games(self, season_label: str, season_type: str | None = None) -> list[dict]:
+        return self.games.list_games(season_label.strip(), season_type)
+
+    def get_game_stats(self, game_id: int) -> dict:
+        return self.games.get_game_stats(game_id)
+
+    def get_season_stats(self, season_label: str, season_type: str | None = None) -> SeasonSummary:
+        raw = self.games.get_season_summary(season_label.strip(), season_type)
+
+        for goalie in raw["goalies"]:
             goalie["sv_pct"] = calculate_save_percentage(goalie["saves"], goalie["shots_received"])
 
         return raw
 
-    def send_season_stats_email(self, season_label: str) -> tuple[bool, str]:
-        summary = self.get_season_stats(season_label)
+    def send_season_stats_email(self, season_label: str, season_type: str | None = None) -> tuple[bool, str]:
+        summary = self.get_season_stats(season_label, season_type)
         recipients = [recipient.email for recipient in self.list_mail_recipients()]
         if not recipients:
             raise ValueError("No mail recipients configured")
 
-        subject = f"Hockey stats update - {season_label}"
+        type_str = f" ({season_type})" if season_type else ""
+        subject = f"Hockey stats update - {season_label}{type_str}"
         body = self._format_summary_email(summary)
 
         success, detail = self.sender.send(subject=subject, body=body, recipients=recipients)
@@ -188,13 +270,14 @@ class HockeyService:
             if min(stat.goals, stat.assists, stat.pim, stat.shg, stat.ppg) < 0:
                 raise ValueError("Skater stats cannot be negative")
         for stat in goalie_stats:
-            if min(stat.saves, stat.goals_against, stat.shots_received) < 0:
-                raise ValueError("Goalkeeper stats cannot be negative")
+            if min(stat.saves, stat.goals_against) < 0:
+                raise ValueError("Goalie stats cannot be negative")
 
     @staticmethod
     def _format_summary_email(summary: SeasonSummary) -> str:
+        type_str = f" ({summary['season_type']})" if summary.get('season_type') and summary['season_type'] != 'all' else ""
         lines = [
-            f"Season: {summary['season']}",
+            f"Season: {summary['season']}{type_str}",
             f"Team record: {summary['team']['wins']}W-{summary['team']['losses']}L",
             "",
             "Skaters:",
@@ -205,11 +288,11 @@ class HockeyService:
             )
 
         lines.append("")
-        lines.append("Goalkeepers:")
-        for row in summary["goalkeepers"]:
+        lines.append("Goalies:")
+        for row in summary["goalies"]:
             sv_display = "NaN" if row["sv_pct"] != row["sv_pct"] else f"{row['sv_pct']:.3f}"
             lines.append(
-                f"- {row['player_name']}: Saves={row['saves']} GA={row['goals_against']} Wins={row['wins']} SV%={sv_display}"
+                f"- {row['player_name']}: Saves={row['saves']} GA={row['goals_against']} Shots={row['shots_received']} Wins={row['wins']} SV%={sv_display}"
             )
 
         return "\n".join(lines)

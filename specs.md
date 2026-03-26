@@ -1,17 +1,23 @@
 # Specifications
 
 ## 1) Product Overview
-- Desktop application for managing and displaying cumulative hockey stats by season.
+- Desktop application for managing and displaying cumulative hockey stats by season:
+    - include regular season and playoff stats as different stats displayed for the same season.
 - Core must follow Clean Architecture so UI can be replaced (desktop now, potentially web/mobile later).
 - Initial users are team staff/coaches managing one team.
 
 ## 2) Goals and Non-Goals
 
 ### Goals (MVP)
-- Register and manage team roster (add/remove players).
+- Register and manage team roster (add/remove players):
+    - Allow editing for roster players and goalkeepers
+    - Allow custom player numbers: (Numbers can change):
+        - Temporary player can use same number of another temporary player in the same season
+        - In diffferent seasons two players can wear same number
 - Register game-by-game stats from score sheet fields.
 - Show cumulative season stats (player, goalkeeper, team).
-- Send updated stats summary to a team mailing list.
+- Send updated stats summary to a team mailing list:
+    -as soon as a game is saved, an email should be sent.
 
 ### Non-Goals (for PoC)
 - Full OCR pipeline for score sheet images (keep as extension point).
@@ -30,16 +36,21 @@
 - Add player with initial stats = 0.
 - Remove player from active roster.
 - Keep player historical stats for past games/seasons even if removed from active roster.
-- Player has role/position: `skater` or `goalkeeper`.
-- For PoC, role can change over time; game stats determine role-specific aggregation.
+- Player has role/position: `skater` or `goalkeeper`:
+    - For PoC, role can change over time; game stats determine role-specific aggregation.
+    - It is okay that a player has a single role as an attribute
+    - As and exception, the player can play as a different role (skater or goalkeeper)
+
 
 ### FR-2 Input Match/Score Sheet Data
 - Data is entered via GUI form that maps to score sheet fields.
 - At minimum, game input must capture:
     - Game metadata: date, opponent, season, result (win/loss), optional notes.
     - Per skater: goals, assists, PIM, SHG, PPG.
-    - Per goalkeeper: saves, goals against, shots received (if not entered, derive from saves + goals against).
+    - Per goalie: saves, goals against, shots received (if not entered, derive from saves + goals against).
 - Save operation validates required fields and rejects invalid values (negative stats, unknown player).
+- Must be a button to correct last game`s stats:
+    - consider correcting another game that is not the last game (by introducing the date, for example)
 
 ### FR-3 Display Season Outputs
 - Show cumulative stats per season.
@@ -49,7 +60,7 @@
     - PIM
     - SHG
     - PPG
-- Per goalkeeper:
+- Per goalie (- use the term goalie instead of goalkeeper at all the menus):
     - Saves
     - Wins
     - Goals Against
@@ -61,7 +72,9 @@
 ### FR-4 Derived Metrics
 - Goalkeeper save percentage is calculated dynamically:
     - $SV\% = \frac{Saves}{ShotsReceived}$
-- If `ShotsReceived = 0`, display `SV% = NaN`.
+    - If `ShotsReceived = 0`, display `SV% = NaN`.
+    - shots against a goalkeeper should be exactly saves + goals against (GA)
+    - shots should be a calculated field shown in the interface
 
 ### FR-5 Send Stats by Email
 - After stats update, system can send summary email to mailing list.
@@ -145,10 +158,13 @@
 ## 10) Acceptance Criteria for PoC
 - Can add/remove players and list active roster.
 - Can register one game with mixed skater + goalkeeper stats.
-- Season dashboard totals match manual calculation for test data.
+- Season dashboard totals match manual calculation for test data:
+    - should not be able to write oin the dashboard
 - SV% is computed correctly and shown for goalkeeper(s).
 - Team wins/losses update after each game.
 - Stats summary email can be sent to all mailing recipients.
+
+- make an User-friendly interface, improving the user's experience.
 
 ## 11) Suggested Stack
 - Python 3.12+
@@ -159,6 +175,17 @@
 
 ## 12) Input Artifact
 - Example score sheet reference: `score_sheet.pdf` (to map GUI fields and future AI ingestion payload).
+
+## 13) v2 Improvements (Implemented)
+- Improved error messages when saving duplicate game stats
+- Custom player numbers that can change
+- Edit functionality for roster players and goalies
+- Shots calculated automatically (saves + GA)
+- Read-only dashboard
+- Auto-send email when game is saved
+- Use "goalie" instead of "goalkeeper"
+- Regular season vs playoff stats as separate views
+- Edit any existing game stats
 
 
 
