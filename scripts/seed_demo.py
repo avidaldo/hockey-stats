@@ -7,11 +7,11 @@ from app.domain.models import GoalieGameStatInput, SkaterGameStatInput
 from app.main import build_service
 
 
-def _add_player_if_missing(service, name: str, role: str) -> None:
+def _add_player_if_missing(service, name: str, role: str, number: int | None = None) -> None:
     current = {player.name.lower(): player for player in service.list_active_players()}
     if name.lower() in current:
         return
-    service.add_player(name=name, role=role)
+    service.add_player(name=name, role=role, number=number)
 
 
 def _add_recipient_if_missing(service, name: str, email: str) -> None:
@@ -24,9 +24,10 @@ def _add_recipient_if_missing(service, name: str, email: str) -> None:
 def seed() -> None:
     service = build_service()
 
-    _add_player_if_missing(service, "Liam", "skater")
-    _add_player_if_missing(service, "Noah", "skater")
-    _add_player_if_missing(service, "Ethan", "goalkeeper")
+    # Add players with jersey numbers
+    _add_player_if_missing(service, "Liam", "skater", 10)
+    _add_player_if_missing(service, "Noah", "skater", 17)
+    _add_player_if_missing(service, "Ethan", "goalie", 1)
 
     _add_recipient_if_missing(service, "Coach", "coach@example.com")
     _add_recipient_if_missing(service, "Manager", "manager@example.com")
@@ -60,23 +61,25 @@ def seed() -> None:
             player_id=active_by_name["Ethan"].id,
             saves=28,
             goals_against=2,
-            shots_received=30,
+            shots_received=30,  # This will be recalculated as saves + GA
         )
     ]
 
     try:
         service.record_game_stats(
             season_label=season,
+            season_type="regular",
             game_date=game_date,
             opponent="Demo Opponent",
             result="win",
             notes="Demo seeded game",
             skater_stats=skaters,
             goalie_stats=goalies,
+            auto_send_email=False,  # Don't send email during seeding
         )
         print("Seed completed: players, recipients, and one demo game were added.")
-    except sqlite3.IntegrityError:
-        print("Seed skipped game insert: demo game already exists for today.")
+    except (sqlite3.IntegrityError, ValueError) as exc:
+        print(f"Seed skipped game insert: {exc}")
         print("Players/recipients were still ensured.")
 
 
