@@ -1,11 +1,11 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass(slots=True)
 class Player:
     id: int
     name: str
-    role: str
+    role: str  # "skater" | "goalie"
     active: bool
 
 
@@ -24,6 +24,7 @@ class SkaterGameStatInput:
     pim: int = 0
     shg: int = 0
     ppg: int = 0
+    jersey_number: int | None = None
 
 
 @dataclass(slots=True)
@@ -31,4 +32,4 @@ class GoalieGameStatInput:
     player_id: int
     saves: int = 0
     goals_against: int = 0
-    shots_received: int = 0
+    jersey_number: int | None = None

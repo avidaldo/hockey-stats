@@ -26,7 +26,7 @@ def seed() -> None:
 
     _add_player_if_missing(service, "Liam", "skater")
     _add_player_if_missing(service, "Noah", "skater")
-    _add_player_if_missing(service, "Ethan", "goalkeeper")
+    _add_player_if_missing(service, "Ethan", "goalie")
 
     _add_recipient_if_missing(service, "Coach", "coach@example.com")
     _add_recipient_if_missing(service, "Manager", "manager@example.com")
@@ -60,7 +60,6 @@ def seed() -> None:
             player_id=active_by_name["Ethan"].id,
             saves=28,
             goals_against=2,
-            shots_received=30,
         )
     ]
 
@@ -70,6 +69,7 @@ def seed() -> None:
             game_date=game_date,
             opponent="Demo Opponent",
             result="win",
+            game_type="regular",
             notes="Demo seeded game",
             skater_stats=skaters,
             goalie_stats=goalies,
