@@ -1,6 +1,13 @@
 # Open Questions
 
-Unresolved decisions for future discussion. Resolved items have been incorporated into `specs.md`.
+This file tracks unresolved design decisions. In the Spec-Driven Development workflow this project follows, open questions serve a specific purpose:
+
+- **During a development iteration**: they capture decisions that cannot be made yet — either because technical information is missing, or because the client needs to weigh in.
+- **After a client demo**: each question is reviewed with the client and either promoted to a confirmed requirement in `specs.md`, marked as explicitly out of scope (Non-Goal), or left for a future iteration.
+
+Open questions should not be resolved by guessing. They are honest acknowledgment of uncertainty, not failures. See [`docs/sdd_workflow.md`](docs/sdd_workflow.md) for context.
+
+Resolved items have been incorporated into [`specs.md`](specs.md).
 
 ---
 

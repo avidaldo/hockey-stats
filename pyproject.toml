@@ -1,0 +1,7 @@
+[project]
+name = "hockey-stats"
+version = "0.2.0"
+description = "Desktop application for managing amateur hockey stats (Clean Architecture, Python + Tkinter + SQLite)"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []

@@ -1,8 +1,16 @@
 # Specifications
 
-> **Current version: v2** (initial PoC spec merged with post-demo client requirements).
-> See `open_questions.md` for unresolved decisions.
-> See `docs/class_diagram.md` for the object model (UML class diagram).
+| Version | Date | Description |
+|---------|------|-------------|
+| v1 | 2025 (approx.) | Initial PoC specification |
+| v2 | 2026-04-10 | Post-demo client requirements merged (current) |
+
+> **Current version: v2**
+>
+> - Unresolved decisions → [`open_questions.md`](open_questions.md)
+> - Object model (UML) → [`docs/class_diagram.md`](docs/class_diagram.md)
+> - Architecture (layers, ports, decisions) → [`docs/architecture.md`](docs/architecture.md)
+> - Iteration history → [`docs/iteration_log.md`](docs/iteration_log.md)
 
 ---
 
@@ -111,34 +119,15 @@
 
 ---
 
-## 7) Clean Architecture
+## 7) Architecture
 
-### Domain Layer
-- Entities: `Player`, `Season`, `Game`, `SkaterGameStat`, `GoalieGameStat`, `MailRecipient`.
-- Value objects: `PlayerId`, `SeasonId`, `EmailAddress`, `GameResult`, `GameType`.
-- Domain services: `SeasonStatAggregator`, `GoalieSavePercentageCalculator`.
+See [`docs/architecture.md`](docs/architecture.md) for the full architecture description: layer breakdown, port interfaces, composition root, key architectural decisions, and extension points.
 
-### Application Layer (Use Cases / Service)
-- `add_player`, `edit_player`, `remove_player`, `list_active_players`
-- `record_game_stats`, `correct_game_stats`, `get_last_game`, `list_games_by_season`
-- `get_season_stats`
-- `send_season_stats_email`
-- `add_mail_recipient`, `remove_mail_recipient`, `list_mail_recipients`
-
-### Ports (Interfaces)
-- `PlayerRepository`
-- `GameRepository`
-- `MailingListRepository`
-- `EmailSender`
-- `EmailLogRepository`
-- `AIIngestionGateway` (future)
-
-### Infrastructure Layer
-- SQLite repositories.
-- SMTP adapter for email (mock fallback when unconfigured).
-
-### Presentation Layer
-- Tkinter desktop GUI calling use cases only.
+Summary:
+- **Domain** (`app/domain/`): entities and domain services; no external dependencies.
+- **Application** (`app/application/use_cases.py`): use cases and port Protocols.
+- **Infrastructure** (`app/infrastructure/`): SQLite repositories, SMTP email adapter.
+- **Presentation** (`app/ui/`): Tkinter GUI; calls use cases only.
 
 ---
 

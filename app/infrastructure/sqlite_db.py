@@ -118,8 +118,42 @@ class SqliteDatabase:
             if "jersey_number" not in cols:
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN jersey_number INTEGER")
 
-        # Migrate role values: 'goalkeeper' → 'goalie' for legacy records
-        conn.execute("UPDATE players SET role = 'goalie' WHERE role = 'goalkeeper'")
+        player_table_sql = conn.execute(
+            "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'players'"
+        ).fetchone()
+        if player_table_sql and "'goalkeeper'" in str(player_table_sql[0]):
+            self._migrate_player_roles_to_goalie(conn)
+        else:
+            conn.execute("UPDATE players SET role = 'goalie' WHERE role = 'goalkeeper'")
+
+    def _migrate_player_roles_to_goalie(self, conn: sqlite3.Connection) -> None:
+        conn.execute("PRAGMA foreign_keys = OFF")
+        try:
+            conn.executescript(
+                """
+                CREATE TABLE players_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    name TEXT NOT NULL,
+                    role TEXT NOT NULL CHECK (role IN ('skater', 'goalie')),
+                    active INTEGER NOT NULL DEFAULT 1,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                );
+
+                INSERT INTO players_new(id, name, role, active, created_at)
+                SELECT
+                    id,
+                    name,
+                    CASE WHEN role = 'goalkeeper' THEN 'goalie' ELSE role END,
+                    active,
+                    created_at
+                FROM players;
+
+                DROP TABLE players;
+                ALTER TABLE players_new RENAME TO players;
+                """
+            )
+        finally:
+            conn.execute("PRAGMA foreign_keys = ON")
 
 
 class SqlitePlayerRepository:
