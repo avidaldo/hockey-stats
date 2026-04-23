@@ -12,7 +12,20 @@ This project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-- Next client demo feedback and iteration 0.3 planning.
+Planned for iteration 0.3 (spec v3, driven by v0.2 demo feedback — see [`notes-v3.md`](notes-v3.md)):
+
+### Added
+- **Player type**: `permanent` / `substitute` attribute on players.
+- **Season roster**: `season_roster` table stores a permanent player's default jersey number per season.
+- **Season auto-derivation**: game date determines season automatically (September–April rule); no manual season selector.
+- **Date picker**: calendar control with today as default; validates that dates fall within September–April.
+- **Multi-user with roles**: multiple users with role-based access (permissions TBD).
+
+### Changed
+- **Game entry form**: season field removed; jersey number pre-filled from season roster for permanent players.
+- **Dashboard**: jersey number column added to skater and goalie stat tables.
+- **Correction flow bug fix**: changing a game date updates the existing record in place instead of creating a new one; cross-season date changes are rejected.
+- **Player identification**: all UI screens identify players by ID internally; no reliance on name uniqueness; internal database IDs no longer displayed to users.
 
 ---
 
