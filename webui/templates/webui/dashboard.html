@@ -14,7 +14,7 @@
 </div>
 
 <div class="grid grid-2">
-  {% for block_name, block in [('Regular season', summary.regular), ('Playoffs', summary.playoff)] %}
+  {% for block_name, block in season_blocks %}
   <section class="card">
     <h2 style="margin-top:0;">{{ block_name }}</h2>
     <p><span class="season-pill">{{ summary.season }}</span> Team record: <strong>{{ block.team.wins }}W-{{ block.team.losses }}L</strong></p>

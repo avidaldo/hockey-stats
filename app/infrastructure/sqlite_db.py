@@ -501,7 +501,7 @@ class SqliteGameRepository:
         skaters = conn.execute(
             """
             SELECT p.name AS player_name,
-                   COALESCE(sr.jersey_number, MAX(s.jersey_number)) AS jersey_number,
+                   COALESCE(sr.jersey_number, MAX(s.jersey_number)) AS summary_jersey_number,
                    SUM(s.goals) AS goals,
                    SUM(s.assists) AS assists,
                    SUM(s.pim) AS pim,
@@ -513,7 +513,7 @@ class SqliteGameRepository:
             LEFT JOIN season_roster sr ON sr.player_id = s.player_id AND sr.season_id = g.season_id
             WHERE g.season_id = ? AND g.game_type = ?
             GROUP BY s.player_id, p.name, sr.jersey_number
-            ORDER BY jersey_number IS NULL, jersey_number, p.name
+            ORDER BY summary_jersey_number IS NULL, summary_jersey_number, p.name
             """,
             (season_id, game_type),
         ).fetchall()
@@ -521,7 +521,7 @@ class SqliteGameRepository:
         goalies = conn.execute(
             """
             SELECT p.name AS player_name,
-                   COALESCE(sr.jersey_number, MAX(gs.jersey_number)) AS jersey_number,
+                   COALESCE(sr.jersey_number, MAX(gs.jersey_number)) AS summary_jersey_number,
                    SUM(gs.saves) AS saves,
                    SUM(gs.goals_against) AS goals_against,
                    SUM(gs.shots_received) AS shots_received,
@@ -532,7 +532,7 @@ class SqliteGameRepository:
             LEFT JOIN season_roster sr ON sr.player_id = gs.player_id AND sr.season_id = g.season_id
             WHERE g.season_id = ? AND g.game_type = ?
             GROUP BY gs.player_id, p.name, sr.jersey_number
-            ORDER BY jersey_number IS NULL, jersey_number, p.name
+            ORDER BY summary_jersey_number IS NULL, summary_jersey_number, p.name
             """,
             (season_id, game_type),
         ).fetchall()
@@ -540,7 +540,7 @@ class SqliteGameRepository:
         skater_rows: list[SkaterSummaryRow] = [
             SkaterSummaryRow(
                 player_name=row["player_name"],
-                jersey_number=row["jersey_number"],
+                jersey_number=row["summary_jersey_number"],
                 goals=int(row["goals"] or 0),
                 assists=int(row["assists"] or 0),
                 pim=int(row["pim"] or 0),
@@ -552,7 +552,7 @@ class SqliteGameRepository:
         goalie_rows: list[GoalieSummaryRow] = [
             GoalieSummaryRow(
                 player_name=row["player_name"],
-                jersey_number=row["jersey_number"],
+                jersey_number=row["summary_jersey_number"],
                 saves=int(row["saves"] or 0),
                 goals_against=int(row["goals_against"] or 0),
                 shots_received=int(row["shots_received"] or 0),

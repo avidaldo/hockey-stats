@@ -113,6 +113,10 @@ def dashboard(request: HttpRequest) -> HttpResponse:
         {
             "season": season,
             "summary": summary,
+            "season_blocks": [
+                ("Regular season", summary["regular"]),
+                ("Playoffs", summary["playoff"]),
+            ],
             "notice": request.GET.get("notice", ""),
             "error": request.GET.get("error", ""),
         },
