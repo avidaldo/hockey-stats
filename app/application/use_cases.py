@@ -250,7 +250,7 @@ class HockeyService:
 
     def record_game_stats(
         self,
-        season_label: str,
+        season_label: str | None,
         game_date: str,
         opponent: str,
         result: str,
@@ -277,7 +277,7 @@ class HockeyService:
     def correct_game_stats(
         self,
         game_id: int,
-        season_label: str,
+        season_label: str | None,
         game_date: str,
         opponent: str,
         result: str,

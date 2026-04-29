@@ -236,7 +236,7 @@ def new_game(request: HttpRequest) -> HttpResponse:
         if game_form.is_valid() and skater_formset.is_valid() and goalie_formset.is_valid():
             try:
                 service.record_game_stats(
-                    season_label="",
+                    season_label=None,
                     game_date=game_form.cleaned_data["game_date"].isoformat(),
                     opponent=game_form.cleaned_data["opponent"],
                     result=game_form.cleaned_data["result"],
@@ -302,7 +302,7 @@ def edit_game(request: HttpRequest, game_id: int) -> HttpResponse:
             try:
                 service.correct_game_stats(
                     game_id=game_id,
-                    season_label="",
+                    season_label=None,
                     game_date=game_form.cleaned_data["game_date"].isoformat(),
                     opponent=game_form.cleaned_data["opponent"],
                     result=game_form.cleaned_data["result"],
