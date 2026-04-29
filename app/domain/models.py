@@ -7,6 +7,8 @@ class Player:
     name: str
     role: str  # "skater" | "goalie"
     active: bool
+    player_type: str = "permanent"  # "permanent" | "substitute"
+    default_jersey_number: int | None = None
 
 
 @dataclass(slots=True)

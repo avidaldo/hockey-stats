@@ -1,12 +1,12 @@
 # Liam Hockey Stats
 
-Desktop Python app to manage amateur hockey stats with a clean-architecture style split.
+Django app to manage amateur hockey stats with a clean-architecture style split.
 
 ## Documentation
 
 | Document | Description |
 |----------|-------------|
-| [`specs.md`](specs.md) | Full product specification (v2, current) — requirements, data model, acceptance criteria |
+| [`specs.md`](specs.md) | Full product specification (v3, current) — requirements, data model, acceptance criteria |
 | [`open_questions.md`](open_questions.md) | Unresolved design decisions; input for the next iteration |
 | [`CHANGELOG.md`](CHANGELOG.md) | Version history and notable changes |
 | [`docs/architecture.md`](docs/architecture.md) | Architecture overview — layers, ports, key decisions |
@@ -19,7 +19,7 @@ Desktop Python app to manage amateur hockey stats with a clean-architecture styl
 
 This project follows **Spec-Driven Development (SDD)**: the specification document (`specs.md`) is the single source of truth. Each iteration starts with an updated spec and ends with a client demo and feedback session.
 
-Current iteration: **v0.2 (MVP)** — ready for client demo. See [`docs/iteration_log.md`](docs/iteration_log.md) for the full history and next planned iteration.
+Current iteration: **v0.3** — Django presentation layer aligned with the current v3 specification. See [`docs/iteration_log.md`](docs/iteration_log.md) for the full history.
 
 See [`docs/sdd_workflow.md`](docs/sdd_workflow.md) for a full explanation of the workflow, including how AI coding agents (GitHub Copilot) fit into the SDD process.
 
@@ -37,11 +37,11 @@ See [`docs/sdd_workflow.md`](docs/sdd_workflow.md) for a full explanation of the
 1. Create and activate your Python environment.
 2. Install dependencies:
    ```
-   pip install -r requirements.txt
+   pip install -e .
    ```
-3. Start app:
+3. Start the Django server:
    ```
-   python -m app.main
+   python manage.py runserver
    ```
 
 ## Seed demo data
@@ -62,6 +62,8 @@ If these environment variables are present, real SMTP sending is used:
 If missing, the mock sender is used and email attempts are still logged.
 
 ## Notes
+- Game season is derived automatically from the selected date (September–April rule).
+- The web UI keeps internal player IDs out of the visible interface while still using them internally in form submissions.
 - `SV%` shows `N/A` when shots received is 0.
 - Shots received is always computed as `saves + goals against`; it is not a free-entry field.
 - Duplicate game detection is by `season + date + opponent`; use the correction flow to fix recorded games.

@@ -1,0 +1,64 @@
+{% extends "webui/base.html" %}
+{% block content %}
+<div class="grid grid-2">
+  <section class="card">
+    <h2 style="margin-top:0;">Add recipient</h2>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="add">
+      <div class="form-grid">
+        {% for field in add_form %}
+        <div>
+          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {{ field.errors }}
+        </div>
+        {% endfor %}
+      </div>
+      <div class="actions" style="margin-top:1rem;"><button type="submit">Add recipient</button></div>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2 style="margin-top:0;">Resend summary</h2>
+    <form method="post">
+      {% csrf_token %}
+      <input type="hidden" name="action" value="resend">
+      <div class="form-grid">
+        {% for field in resend_form %}
+        <div>
+          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {{ field.errors }}
+        </div>
+        {% endfor %}
+      </div>
+      <div class="actions" style="margin-top:1rem;"><button type="submit">Resend email</button></div>
+    </form>
+  </section>
+</div>
+
+<section class="card">
+  <h2 style="margin-top:0;">Recipients</h2>
+  <table>
+    <thead><tr><th>Name</th><th>Email</th><th></th></tr></thead>
+    <tbody>
+      {% for recipient in recipients %}
+      <tr>
+        <td>{{ recipient.name }}</td>
+        <td>{{ recipient.email }}</td>
+        <td>
+          <form method="post" action="{% url 'remove-recipient' recipient.id %}" class="inline">
+            {% csrf_token %}
+            <input type="hidden" name="season" value="{{ season }}">
+            <button type="submit" class="danger">Remove</button>
+          </form>
+        </td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="3" class="muted">No recipients configured.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

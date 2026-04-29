@@ -1,0 +1,50 @@
+{% extends "webui/base.html" %}
+{% block content %}
+<div class="grid grid-2">
+  <section class="card">
+    <h2 style="margin-top:0;">Add player</h2>
+    <form method="post">
+      {% csrf_token %}
+      <div class="form-grid">
+        {% for field in form %}
+        <div>
+          <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+          {{ field }}
+          {{ field.errors }}
+        </div>
+        {% endfor %}
+      </div>
+      <div class="actions" style="margin-top:1rem;"><button type="submit">Add player</button></div>
+    </form>
+  </section>
+
+  <section class="card">
+    <h2 style="margin-top:0;">Active roster — {{ season }}</h2>
+    <table>
+      <thead>
+        <tr><th>Name</th><th>Role</th><th>Type</th><th>Default jersey</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for player in players %}
+        <tr>
+          <td>{{ player.name }}</td>
+          <td>{{ player.role }}</td>
+          <td>{{ player.player_type }}</td>
+          <td>{% if player.default_jersey_number is not None %}{{ player.default_jersey_number }}{% else %}<span class="muted">—</span>{% endif %}</td>
+          <td class="actions">
+            <a class="button-link secondary" href="{% url 'edit-player' player.id %}?season={{ season|urlencode }}">Edit</a>
+            <form method="post" action="{% url 'remove-player' player.id %}" class="inline">
+              {% csrf_token %}
+              <input type="hidden" name="season" value="{{ season }}">
+              <button type="submit" class="danger">Remove</button>
+            </form>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="muted">No active players yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</div>
+{% endblock %}
