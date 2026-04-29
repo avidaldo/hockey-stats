@@ -11,26 +11,68 @@ Resolved items have been incorporated into [`specs.md`](specs.md).
 
 ---
 
+## Multi-user Roles (v3 — open)
+
+- What roles exist? (e.g., Manager, Coach, Admin?)
+- What actions can each role perform?
+    - Can a Coach enter/correct game stats, or only view the dashboard?
+    - Can a Manager manage the mailing list?
+    - Is there an Admin role that can manage users?
+- How are users authenticated? (username/password, SSO, other?)
+- Is this a single shared login per role, or individual named accounts?
+
+> **Status:** Raised at v0.2 demo; client described it as "debate constante" (ongoing debate). To be defined before implementation begins.
+
+---
+
+## Season Label Format (v3 — open)
+
+- The season label format is `YYYY-YY` (e.g., `2025-26`) based on client feedback. However:
+    - Should the short form always drop the century (e.g., `2025-26` not `2025-2026`)?
+    - How should century transitions be handled (e.g., a `2099-00` season)?
+- Current plan: use `YYYY-YY` abbreviated format; century edge cases deferred.
+
+---
+
+## Substitute Player Jersey Numbers (v3 — open)
+
+- For substitute players, the game stat line still has a nullable `jersey_number` field.
+    - Should the UI prompt the user to enter the substitute's jersey number for the game?
+    - Or should the jersey number field be hidden/disabled for substitutes?
+- Current assumption: the field remains optional and visible for all players, as it may be useful to record a substitute's jersey number for reference.
+
+---
+
 ## Jersey Numbers
 
-- **Within a season**: can two *regular* (non-temporary) players share the same jersey number in the same season?
-    - Current assumption: no — only temporary/substitute players may share a number.
-    - No uniqueness constraint is currently enforced in the DB; this is left as a validation decision.
+- **Within a season**: can two *permanent* players share the same jersey number in the same season?
+    - Current assumption: no — only substitute players may share a number with others.
+    - No uniqueness constraint is currently enforced in the DB on `season_roster`; this is left as a validation decision.
+
+---
 
 ## Game Corrections
 
 - Should corrections be restricted to a time window after the game (e.g., 24 hours), or always allowed?
     - Current implementation: corrections allowed at any time.
 
+---
+
 ## Season / Playoff Labels
 
 - Are playoffs part of the same season label (e.g., `2024-25`) or a separate label?
     - Current implementation: same label, differentiated by `game_type = 'playoff'`.
 
+---
+
 ## Backward Compatibility
 
 - How should records created before the `game_type` and `jersey_number` fields were added behave?
     - Current migration: `game_type` defaults to `'regular'`; `jersey_number` defaults to `NULL`.
+- How should records created before `player_type` and `season_roster` were added behave?
+    - Proposed migration: existing players default to `player_type = 'permanent'`; no `season_roster` entries created (jersey numbers remain per-game only until explicitly set).
+
+---
 
 ## Role Decisions
 

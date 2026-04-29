@@ -46,7 +46,7 @@ The client demo surfaced the following new requirements and clarifications (capt
 ## Iteration 0.2 — Minimum Viable Product (current)
 
 **Type:** MVP  
-**Status:** Completed — ready for next client demo  
+**Status:** Completed — demo presented to client (2026-04-23)  
 **Spec version:** v2 ([`specs.md`](../specs.md))
 
 ### Goal
@@ -74,34 +74,59 @@ Items captured in [`open_questions.md`](../open_questions.md) that were explicit
 - Correction time window restriction.
 - Score sheet image OCR / AI ingestion pipeline (FR-8, explicitly a Non-Goal for this iteration).
 
-### What to validate at next client demo
+### What was validated at the v0.2 demo (2026-04-23)
 
-1. Correction flow: is the two-step load-then-save intuitive?
-2. Playoff split: does the dashboard format match what coaches actually use?
-3. Email format: does the text summary contain the right information in a readable format?
-4. Jersey number behavior: is per-game-line tracking sufficient, or do coaches want per-season tracking?
+| Question | Client Answer |
+|----------|--------------|
+| Correction flow intuitive? | Yes, but revealed a bug: date change creates new game instead of updating existing |
+| Playoff split format OK? | Yes |
+| Email format OK? | Yes |
+| Jersey number per-game-line sufficient? | No — permanent players need a fixed jersey per season as a default |
+
+### Client feedback that drives v0.3
+
+Full structured notes in [`notes-v3.md`](../notes-v3.md). Summary:
+
+| Feedback | Action for v0.3 |
+|----------|----------------|
+| Season should be derived from the date, not selectable | Remove season field from game entry; auto-derive from date (Sep–Apr rule) |
+| Date should default to today; constrained to Sep–Apr | Add date picker with today default; validate against season months |
+| Bug: date change in correction creates a new game | Fix correction flow to update existing record in-place |
+| Internal row ID shown in UI — user doesn't want it | Remove all internal ID display from UI |
+| Jersey as default per player per season | Add `player_type` + `season_roster` table; pre-fill jersey in game entry form |
+| Dashboard should show jersey numbers | Add jersey number column to dashboard stat tables |
+| Players identified by name — can cause confusion | Use player ID for lookup; display must be unambiguous |
+| Permanent vs. substitute player categories | New `player_type` attribute on players; roster stores permanent jerseys only |
+| Multi-user with roles needed | Confirmed requirement; exact permissions still under discussion |
 
 ---
 
 ## Iteration 0.3 — Next (planned)
 
-**Type:** TBD (scope to be defined after client demo of v0.2)  
-**Status:** Not started — awaiting client feedback
+**Type:** Feature iteration  
+**Status:** Not started — spec v3 confirmed; awaiting implementation  
+**Spec version:** v3 ([`specs.md`](../specs.md))  
+**Meeting notes:** [`notes-v3.md`](../notes-v3.md)
 
-### Input
+### Confirmed requirements (from v0.2 demo)
 
-- Feedback from the v0.2 demo (to be captured in `open_questions.md` during the meeting).
-- Any items promoted from the current open questions.
+- **Season auto-derivation**: remove the season selector; compute season label from game date using the Sep–Apr rule. Date picker defaults to today; dates outside Sep–Apr are rejected.
+- **Correction flow bug fix**: when a game date is changed during correction, update the existing record rather than creating a new one. Reject cross-season date changes.
+- **Player type**: add `permanent` / `substitute` distinction to players.
+- **Season roster**: `season_roster` table; store default jersey per permanent player per season.
+- **Jersey in game entry**: pre-fill jersey from season roster for permanent players; override allowed.
+- **Jersey in dashboard**: display jersey number alongside player stats.
+- **No internal IDs in UI**: remove all database ID display from every screen.
+- **Multi-user with roles**: users and roles feature (permissions TBD; see [`open_questions.md`](../open_questions.md)).
 
-### Candidate features (unconfirmed)
+### Deferred / still open
 
-These are hypotheses, not confirmed requirements. They will only be added to `specs.md` after the client validates them:
-
-- Jersey number uniqueness rule within a season (resolve current open question).
-- HTML email format for the stats summary.
+- Jersey number uniqueness constraint within a season (see open questions).
+- Exact multi-user permission matrix (under discussion with client).
+- HTML email format.
 - Filter/search in the "Correct Any Game" picker.
 - Export to CSV or PDF.
-- AI score sheet ingestion (FR-8 extension point, if client prioritizes it).
+- AI score sheet ingestion (FR-8).
 
 ### Planned technical improvements (independent of client feedback)
 
