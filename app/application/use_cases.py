@@ -153,7 +153,12 @@ class HockeyService:
 
     def default_season_label(self, reference_date: dt.date | None = None) -> str:
         date_value = reference_date or dt.date.today()
-        start_year = date_value.year if date_value.month >= 9 else date_value.year - 1 if date_value.month <= 4 else date_value.year
+        if date_value.month >= 9:
+            start_year = date_value.year
+        elif date_value.month <= 4:
+            start_year = date_value.year - 1
+        else:
+            start_year = date_value.year
         return self._format_season_label(start_year)
 
     def derive_season_label(self, game_date: str) -> str:

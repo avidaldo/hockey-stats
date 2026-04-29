@@ -5,8 +5,8 @@ import json
 from urllib.parse import urlencode
 
 from django.forms import formset_factory
-from django.http import HttpRequest, HttpResponse
-from django.shortcuts import get_object_or_404, redirect, render
+from django.http import HttpRequest, HttpResponse, HttpResponseRedirect
+from django.shortcuts import render
 from django.urls import reverse
 
 from app.domain.models import Player
@@ -43,7 +43,11 @@ def _redirect_with_notice(route_name: str, *, notice: str | None = None, error: 
     if error:
         query["error"] = error
     url = reverse(route_name)
-    return redirect(f"{url}?{urlencode(query)}" if query else url)
+    if not url.startswith("/"):
+        raise ValueError("Expected a local redirect path")
+    if query:
+        url = f"{url}?{urlencode(query)}"
+    return HttpResponseRedirect(url)
 
 
 def _player_choices(season_label: str) -> tuple[list[Player], list[tuple[int, str]], dict[str, int]]:
@@ -141,7 +145,7 @@ def roster(request: HttpRequest) -> HttpResponse:
                     default_jersey_number=form.cleaned_data.get("default_jersey_number"),
                 )
                 return _redirect_with_notice("roster", season=form.cleaned_data["season_label"], notice="Player added.")
-            except Exception as exc:  # noqa: BLE001
+            except ValueError as exc:
                 error = str(exc)
     else:
         form = PlayerForm(initial={"season_label": season, "player_type": "permanent", "role": "skater"})
@@ -180,7 +184,7 @@ def edit_player(request: HttpRequest, player_id: int) -> HttpResponse:
                     default_jersey_number=form.cleaned_data.get("default_jersey_number"),
                 )
                 return _redirect_with_notice("roster", season=form.cleaned_data["season_label"], notice="Player updated.")
-            except Exception as exc:  # noqa: BLE001
+            except ValueError as exc:
                 return render(
                     request,
                     "webui/player_edit.html",
@@ -235,7 +239,7 @@ def new_game(request: HttpRequest) -> HttpResponse:
                 )
                 season_label = service.derive_season_label(game_form.cleaned_data["game_date"].isoformat())
                 return _redirect_with_notice("dashboard", season=season_label, notice="Game saved and summary email triggered.")
-            except Exception as exc:  # noqa: BLE001
+            except ValueError as exc:
                 error = str(exc)
             else:
                 error = ""
@@ -304,7 +308,7 @@ def edit_game(request: HttpRequest, game_id: int) -> HttpResponse:
                     season=game["season_label"],
                     notice="Game corrected and summary email triggered.",
                 )
-            except Exception as exc:  # noqa: BLE001
+            except ValueError as exc:
                 error = str(exc)
             else:
                 error = ""
@@ -380,7 +384,7 @@ def mailing(request: HttpRequest) -> HttpResponse:
                 try:
                     service.add_mail_recipient(add_form.cleaned_data.get("name", ""), add_form.cleaned_data["email"])
                     return _redirect_with_notice("mailing", season=season, notice="Recipient added.")
-                except Exception as exc:  # noqa: BLE001
+                except ValueError as exc:
                     error = str(exc)
         elif action == "resend":
             resend_form = ResendForm(request.POST)
@@ -391,7 +395,7 @@ def mailing(request: HttpRequest) -> HttpResponse:
                     if success:
                         return _redirect_with_notice("mailing", season=resend_form.cleaned_data["season_label"], notice=detail)
                     return _redirect_with_notice("mailing", season=resend_form.cleaned_data["season_label"], error=detail)
-                except Exception as exc:  # noqa: BLE001
+                except ValueError as exc:
                     error = str(exc)
         else:
             add_form = MailRecipientForm(initial={"season_label": season})
