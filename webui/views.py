@@ -23,6 +23,12 @@ from webui.forms import (
 
 SKATER_FORMSET = formset_factory(SkaterLineForm, extra=4)
 GOALIE_FORMSET = formset_factory(GoalieLineForm, extra=2)
+SAFE_REDIRECT_ROUTES = {
+    "dashboard",
+    "roster",
+    "correction-picker",
+    "mailing",
+}
 
 
 def _service():
@@ -37,6 +43,8 @@ def _player_label(player: Player) -> str:
 
 
 def _redirect_with_notice(route_name: str, *, notice: str | None = None, error: str | None = None, **params: str) -> HttpResponse:
+    if route_name not in SAFE_REDIRECT_ROUTES:
+        raise ValueError("Unsupported redirect route")
     query = {k: v for k, v in params.items() if v}
     if notice:
         query["notice"] = notice
@@ -219,9 +227,9 @@ def new_game(request: HttpRequest) -> HttpResponse:
 
     if request.method == "POST":
         game_form = GameForm(request.POST)
-        season_guess = request.POST.get("game_date", "") or season_guess
+        raw_game_date = request.POST.get("game_date", "")
         try:
-            season_guess = service.derive_season_label(season_guess)
+            season_guess = service.derive_season_label(raw_game_date)
         except ValueError:
             season_guess = service.default_season_label()
         skater_formset, goalie_formset = _build_formsets(season_guess, data=request.POST)
