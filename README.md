@@ -37,11 +37,11 @@ See [`docs/sdd_workflow.md`](docs/sdd_workflow.md) for a full explanation of the
 1. Create and activate your Python environment.
 2. Install dependencies:
    ```
-   pip install -e .
+   uv sync
    ```
 3. Start the Django server:
    ```
-   python manage.py runserver
+uv run python manage.py runserver
    ```
 
 ## Seed demo data
