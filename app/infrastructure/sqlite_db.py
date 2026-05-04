@@ -40,6 +40,7 @@ class SqliteDatabase:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT NOT NULL,
                     role TEXT NOT NULL CHECK (role IN ('skater', 'goalie')),
+                    player_type TEXT NOT NULL DEFAULT 'permanent' CHECK (player_type IN ('permanent', 'substitute')),
                     active INTEGER NOT NULL DEFAULT 1,
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
@@ -47,6 +48,16 @@ class SqliteDatabase:
                 CREATE TABLE IF NOT EXISTS seasons (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     label TEXT NOT NULL UNIQUE
+                );
+
+                CREATE TABLE IF NOT EXISTS season_roster (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    player_id INTEGER NOT NULL,
+                    season_id INTEGER NOT NULL,
+                    jersey_number INTEGER NOT NULL,
+                    FOREIGN KEY(player_id) REFERENCES players(id) ON DELETE CASCADE,
+                    FOREIGN KEY(season_id) REFERENCES seasons(id) ON DELETE CASCADE,
+                    UNIQUE(player_id, season_id)
                 );
 
                 CREATE TABLE IF NOT EXISTS games (
@@ -118,6 +129,27 @@ class SqliteDatabase:
             if "jersey_number" not in cols:
                 conn.execute(f"ALTER TABLE {table} ADD COLUMN jersey_number INTEGER")
 
+        player_cols = {row[1] for row in conn.execute("PRAGMA table_info(players)")}
+        if "player_type" not in player_cols:
+            conn.execute(
+                "ALTER TABLE players ADD COLUMN player_type TEXT NOT NULL DEFAULT 'permanent'"
+            )
+            conn.execute("UPDATE players SET player_type = 'permanent' WHERE player_type IS NULL OR player_type = ''")
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS season_roster (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                player_id INTEGER NOT NULL,
+                season_id INTEGER NOT NULL,
+                jersey_number INTEGER NOT NULL,
+                FOREIGN KEY(player_id) REFERENCES players(id) ON DELETE CASCADE,
+                FOREIGN KEY(season_id) REFERENCES seasons(id) ON DELETE CASCADE,
+                UNIQUE(player_id, season_id)
+            )
+            """
+        )
+
         player_table_sql = conn.execute(
             "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'players'"
         ).fetchone()
@@ -135,15 +167,17 @@ class SqliteDatabase:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT NOT NULL,
                     role TEXT NOT NULL CHECK (role IN ('skater', 'goalie')),
+                    player_type TEXT NOT NULL DEFAULT 'permanent' CHECK (player_type IN ('permanent', 'substitute')),
                     active INTEGER NOT NULL DEFAULT 1,
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 );
 
-                INSERT INTO players_new(id, name, role, active, created_at)
+                INSERT INTO players_new(id, name, role, player_type, active, created_at)
                 SELECT
                     id,
                     name,
                     CASE WHEN role = 'goalkeeper' THEN 'goalie' ELSE role END,
+                    COALESCE(player_type, 'permanent'),
                     active,
                     created_at
                 FROM players;
@@ -160,32 +194,110 @@ class SqlitePlayerRepository:
     def __init__(self, db: SqliteDatabase) -> None:
         self.db = db
 
-    def add_player(self, name: str, role: str) -> int:
+    def _get_or_create_season_id(self, conn: sqlite3.Connection, season_label: str) -> int:
+        row = conn.execute("SELECT id FROM seasons WHERE label = ?", (season_label,)).fetchone()
+        if row:
+            return int(row["id"])
+        cursor = conn.execute("INSERT INTO seasons(label) VALUES (?)", (season_label,))
+        return _last_row_id(cursor)
+
+    def _store_default_jersey(
+        self,
+        conn: sqlite3.Connection,
+        player_id: int,
+        player_type: str,
+        season_label: str | None,
+        default_jersey_number: int | None,
+    ) -> None:
+        if player_type != "permanent":
+            conn.execute("DELETE FROM season_roster WHERE player_id = ?", (player_id,))
+            return
+        if not season_label:
+            return
+        season_id = self._get_or_create_season_id(conn, season_label)
+        if default_jersey_number is None:
+            conn.execute(
+                "DELETE FROM season_roster WHERE player_id = ? AND season_id = ?",
+                (player_id, season_id),
+            )
+            return
+        conn.execute(
+            """
+            INSERT INTO season_roster(player_id, season_id, jersey_number)
+            VALUES (?, ?, ?)
+            ON CONFLICT(player_id, season_id)
+            DO UPDATE SET jersey_number = excluded.jersey_number
+            """,
+            (player_id, season_id, default_jersey_number),
+        )
+
+    def add_player(
+        self,
+        name: str,
+        role: str,
+        player_type: str,
+        season_label: str | None,
+        default_jersey_number: int | None,
+    ) -> int:
         with self.db.connect() as conn:
             cursor = conn.execute(
-                "INSERT INTO players(name, role, active) VALUES (?, ?, 1)",
-                (name, role),
+                "INSERT INTO players(name, role, player_type, active) VALUES (?, ?, ?, 1)",
+                (name, role, player_type),
             )
-            return _last_row_id(cursor)
+            player_id = _last_row_id(cursor)
+            self._store_default_jersey(conn, player_id, player_type, season_label, default_jersey_number)
+            return player_id
 
-    def edit_player(self, player_id: int, name: str, role: str) -> None:
+    def edit_player(
+        self,
+        player_id: int,
+        name: str,
+        role: str,
+        player_type: str,
+        season_label: str | None,
+        default_jersey_number: int | None,
+    ) -> None:
         with self.db.connect() as conn:
             conn.execute(
-                "UPDATE players SET name = ?, role = ? WHERE id = ?",
-                (name, role, player_id),
+                "UPDATE players SET name = ?, role = ?, player_type = ? WHERE id = ?",
+                (name, role, player_type, player_id),
             )
+            self._store_default_jersey(conn, player_id, player_type, season_label, default_jersey_number)
 
     def remove_player(self, player_id: int) -> None:
         with self.db.connect() as conn:
             conn.execute("UPDATE players SET active = 0 WHERE id = ?", (player_id,))
 
-    def list_active_players(self) -> list[Player]:
+    def list_active_players(self, season_label: str | None = None) -> list[Player]:
+        season_lookup = season_label or ""
         with self.db.connect() as conn:
             rows = conn.execute(
-                "SELECT id, name, role, active FROM players WHERE active = 1 ORDER BY name"
+                """
+                SELECT
+                    p.id,
+                    p.name,
+                    p.role,
+                    p.active,
+                    p.player_type,
+                    sr.jersey_number AS default_jersey_number
+                FROM players p
+                LEFT JOIN season_roster sr
+                    ON sr.player_id = p.id
+                   AND sr.season_id = (SELECT id FROM seasons WHERE label = ?)
+                WHERE p.active = 1
+                ORDER BY p.name, p.id
+                """,
+                (season_lookup,),
             ).fetchall()
         return [
-            Player(id=row["id"], name=row["name"], role=row["role"], active=bool(row["active"]))
+            Player(
+                id=row["id"],
+                name=row["name"],
+                role=row["role"],
+                active=bool(row["active"]),
+                player_type=row["player_type"],
+                default_jersey_number=row["default_jersey_number"],
+            )
             for row in rows
         ]
 
@@ -225,8 +337,7 @@ class SqliteGameRepository:
                 )
             except sqlite3.IntegrityError:
                 raise ValueError(
-                    f"Duplicate game detected: a game vs '{opponent}' on {game_date} in season '{season_label}' "
-                    f"already exists. Use the 'Correct Game' flow to edit the existing record."
+                    f"Duplicate game detected: a game vs '{opponent}' on {game_date} in season '{season_label}' already exists. Use the correction flow to edit the existing record."
                 )
             game_id = _last_row_id(cursor)
             self._insert_stat_lines(conn, game_id, skater_stats, goalie_stats)
@@ -246,10 +357,15 @@ class SqliteGameRepository:
     ) -> None:
         with self.db.connect() as conn:
             season_id = self._get_or_create_season_id(conn, season_label)
-            conn.execute(
-                "UPDATE games SET season_id=?, date=?, opponent=?, result=?, game_type=?, notes=? WHERE id=?",
-                (season_id, game_date, opponent, result, game_type, notes, game_id),
-            )
+            try:
+                conn.execute(
+                    "UPDATE games SET season_id=?, date=?, opponent=?, result=?, game_type=?, notes=? WHERE id=?",
+                    (season_id, game_date, opponent, result, game_type, notes, game_id),
+                )
+            except sqlite3.IntegrityError:
+                raise ValueError(
+                    f"Duplicate game detected: a game vs '{opponent}' on {game_date} in season '{season_label}' already exists. Use the correction flow to edit the existing record."
+                )
             conn.execute("DELETE FROM skater_game_stats WHERE game_id = ?", (game_id,))
             conn.execute("DELETE FROM goalie_game_stats WHERE game_id = ?", (game_id,))
             self._insert_stat_lines(conn, game_id, skater_stats, goalie_stats)
@@ -257,8 +373,7 @@ class SqliteGameRepository:
     def get_last_game(self) -> GameDetail | None:
         with self.db.connect() as conn:
             row = conn.execute(
-                "SELECT g.id, g.season_id, g.date, g.opponent, g.result, g.game_type, g.notes "
-                "FROM games g ORDER BY g.id DESC LIMIT 1"
+                "SELECT g.id, g.season_id, g.date, g.opponent, g.result, g.game_type, g.notes FROM games g ORDER BY g.id DESC LIMIT 1"
             ).fetchone()
             if not row:
                 return None
@@ -270,8 +385,7 @@ class SqliteGameRepository:
             if not season_row:
                 return []
             rows = conn.execute(
-                "SELECT g.id, g.date, g.opponent, g.result, g.game_type, g.notes "
-                "FROM games g WHERE g.season_id = ? ORDER BY g.date DESC, g.id DESC",
+                "SELECT g.id, g.date, g.opponent, g.result, g.game_type, g.notes FROM games g WHERE g.season_id = ? ORDER BY g.date DESC, g.id DESC",
                 (int(season_row["id"]),),
             ).fetchall()
             return [
@@ -290,8 +404,7 @@ class SqliteGameRepository:
     def get_game_by_id(self, game_id: int) -> GameDetail | None:
         with self.db.connect() as conn:
             row = conn.execute(
-                "SELECT g.id, g.season_id, g.date, g.opponent, g.result, g.game_type, g.notes "
-                "FROM games g WHERE g.id = ?",
+                "SELECT g.id, g.season_id, g.date, g.opponent, g.result, g.game_type, g.notes FROM games g WHERE g.id = ?",
                 (game_id,),
             ).fetchone()
             if not row:
@@ -348,15 +461,13 @@ class SqliteGameRepository:
     ) -> None:
         for stat in skater_stats:
             conn.execute(
-                "INSERT INTO skater_game_stats(game_id, player_id, jersey_number, goals, assists, pim, shg, ppg) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                "INSERT INTO skater_game_stats(game_id, player_id, jersey_number, goals, assists, pim, shg, ppg) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                 (game_id, stat.player_id, stat.jersey_number, stat.goals, stat.assists, stat.pim, stat.shg, stat.ppg),
             )
         for stat in goalie_stats:
             shots_received = stat.saves + stat.goals_against
             conn.execute(
-                "INSERT INTO goalie_game_stats(game_id, player_id, jersey_number, saves, goals_against, shots_received) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
+                "INSERT INTO goalie_game_stats(game_id, player_id, jersey_number, saves, goals_against, shots_received) VALUES (?, ?, ?, ?, ?, ?)",
                 (game_id, stat.player_id, stat.jersey_number, stat.saves, stat.goals_against, shots_received),
             )
 
@@ -368,12 +479,11 @@ class SqliteGameRepository:
                 return SeasonSummary(season=season_label, regular=empty_block, playoff=dict(empty_block))  # type: ignore[arg-type]
 
             season_id = int(season_row["id"])
-            result: SeasonSummary = SeasonSummary(
+            return SeasonSummary(
                 season=season_label,
                 regular=self._query_block(conn, season_id, "regular"),
                 playoff=self._query_block(conn, season_id, "playoff"),
             )
-            return result
 
     @staticmethod
     def _query_block(conn: sqlite3.Connection, season_id: int, game_type: str) -> SeasonBlock:
@@ -391,13 +501,19 @@ class SqliteGameRepository:
         skaters = conn.execute(
             """
             SELECT p.name AS player_name,
-                   SUM(s.goals) AS goals, SUM(s.assists) AS assists,
-                   SUM(s.pim) AS pim, SUM(s.shg) AS shg, SUM(s.ppg) AS ppg
+                   COALESCE(sr.jersey_number, MAX(s.jersey_number)) AS summary_jersey_number,
+                   SUM(s.goals) AS goals,
+                   SUM(s.assists) AS assists,
+                   SUM(s.pim) AS pim,
+                   SUM(s.shg) AS shg,
+                   SUM(s.ppg) AS ppg
             FROM skater_game_stats s
             JOIN games g ON g.id = s.game_id
             JOIN players p ON p.id = s.player_id
+            LEFT JOIN season_roster sr ON sr.player_id = s.player_id AND sr.season_id = g.season_id
             WHERE g.season_id = ? AND g.game_type = ?
-            GROUP BY s.player_id, p.name ORDER BY p.name
+            GROUP BY s.player_id, p.name, sr.jersey_number
+            ORDER BY summary_jersey_number IS NULL, summary_jersey_number, p.name
             """,
             (season_id, game_type),
         ).fetchall()
@@ -405,14 +521,18 @@ class SqliteGameRepository:
         goalies = conn.execute(
             """
             SELECT p.name AS player_name,
-                   SUM(gs.saves) AS saves, SUM(gs.goals_against) AS goals_against,
+                   COALESCE(sr.jersey_number, MAX(gs.jersey_number)) AS summary_jersey_number,
+                   SUM(gs.saves) AS saves,
+                   SUM(gs.goals_against) AS goals_against,
                    SUM(gs.shots_received) AS shots_received,
                    SUM(CASE WHEN g.result = 'win' THEN 1 ELSE 0 END) AS wins
             FROM goalie_game_stats gs
             JOIN games g ON g.id = gs.game_id
             JOIN players p ON p.id = gs.player_id
+            LEFT JOIN season_roster sr ON sr.player_id = gs.player_id AND sr.season_id = g.season_id
             WHERE g.season_id = ? AND g.game_type = ?
-            GROUP BY gs.player_id, p.name ORDER BY p.name
+            GROUP BY gs.player_id, p.name, sr.jersey_number
+            ORDER BY summary_jersey_number IS NULL, summary_jersey_number, p.name
             """,
             (season_id, game_type),
         ).fetchall()
@@ -420,6 +540,7 @@ class SqliteGameRepository:
         skater_rows: list[SkaterSummaryRow] = [
             SkaterSummaryRow(
                 player_name=row["player_name"],
+                jersey_number=row["summary_jersey_number"],
                 goals=int(row["goals"] or 0),
                 assists=int(row["assists"] or 0),
                 pim=int(row["pim"] or 0),
@@ -431,6 +552,7 @@ class SqliteGameRepository:
         goalie_rows: list[GoalieSummaryRow] = [
             GoalieSummaryRow(
                 player_name=row["player_name"],
+                jersey_number=row["summary_jersey_number"],
                 saves=int(row["saves"] or 0),
                 goals_against=int(row["goals_against"] or 0),
                 shots_received=int(row["shots_received"] or 0),

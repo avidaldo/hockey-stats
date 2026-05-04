@@ -12,10 +12,27 @@ logger = logging.getLogger(__name__)
 
 
 class PlayerRepository(Protocol):
-    def add_player(self, name: str, role: str) -> int: ...
-    def edit_player(self, player_id: int, name: str, role: str) -> None: ...
+    def add_player(
+        self,
+        name: str,
+        role: str,
+        player_type: str,
+        season_label: str | None,
+        default_jersey_number: int | None,
+    ) -> int: ...
+
+    def edit_player(
+        self,
+        player_id: int,
+        name: str,
+        role: str,
+        player_type: str,
+        season_label: str | None,
+        default_jersey_number: int | None,
+    ) -> None: ...
+
     def remove_player(self, player_id: int) -> None: ...
-    def list_active_players(self) -> list[Player]: ...
+    def list_active_players(self, season_label: str | None = None) -> list[Player]: ...
 
 
 class GameInfo(TypedDict):
@@ -82,6 +99,7 @@ class TeamSummary(TypedDict):
 
 class SkaterSummaryRow(TypedDict):
     player_name: str
+    jersey_number: int | None
     goals: int
     assists: int
     pim: int
@@ -91,6 +109,7 @@ class SkaterSummaryRow(TypedDict):
 
 class GoalieSummaryRow(TypedDict):
     player_name: str
+    jersey_number: int | None
     saves: int
     goals_against: int
     shots_received: int
@@ -132,29 +151,87 @@ class HockeyService:
     sender: EmailSender
     email_logs: EmailLogRepository
 
-    def add_player(self, name: str, role: str) -> int:
-        normalized_name = name.strip()
-        normalized_role = role.strip().lower()
-        if not normalized_name:
-            raise ValueError("Player name is required")
-        if normalized_role not in {"skater", "goalie"}:
-            raise ValueError("Role must be 'skater' or 'goalie'")
-        return self.players.add_player(normalized_name, normalized_role)
+    def default_season_label(self, reference_date: dt.date | None = None) -> str:
+        date_value = reference_date or dt.date.today()
+        if date_value.month >= 9:
+            start_year = date_value.year
+        elif date_value.month <= 4:
+            start_year = date_value.year - 1
+        else:
+            start_year = date_value.year
+        return self._format_season_label(start_year)
 
-    def edit_player(self, player_id: int, name: str, role: str) -> None:
+    def derive_season_label(self, game_date: str) -> str:
+        parsed_date = dt.date.fromisoformat(game_date)
+        if 9 <= parsed_date.month <= 12:
+            return self._format_season_label(parsed_date.year)
+        if 1 <= parsed_date.month <= 4:
+            return self._format_season_label(parsed_date.year - 1)
+        raise ValueError("Game date must be in September through April")
+
+    def add_player(
+        self,
+        name: str,
+        role: str,
+        player_type: str = "permanent",
+        season_label: str | None = None,
+        default_jersey_number: int | None = None,
+    ) -> int:
         normalized_name = name.strip()
         normalized_role = role.strip().lower()
+        normalized_player_type = player_type.strip().lower()
         if not normalized_name:
             raise ValueError("Player name is required")
         if normalized_role not in {"skater", "goalie"}:
             raise ValueError("Role must be 'skater' or 'goalie'")
-        self.players.edit_player(player_id, normalized_name, normalized_role)
+        if normalized_player_type not in {"permanent", "substitute"}:
+            raise ValueError("Player type must be 'permanent' or 'substitute'")
+        if default_jersey_number is not None and default_jersey_number < 0:
+            raise ValueError("Jersey number cannot be negative")
+        normalized_season = self._normalize_roster_season(season_label)
+        return self.players.add_player(
+            normalized_name,
+            normalized_role,
+            normalized_player_type,
+            normalized_season,
+            None if normalized_player_type == "substitute" else default_jersey_number,
+        )
+
+    def edit_player(
+        self,
+        player_id: int,
+        name: str,
+        role: str,
+        player_type: str = "permanent",
+        season_label: str | None = None,
+        default_jersey_number: int | None = None,
+    ) -> None:
+        normalized_name = name.strip()
+        normalized_role = role.strip().lower()
+        normalized_player_type = player_type.strip().lower()
+        if not normalized_name:
+            raise ValueError("Player name is required")
+        if normalized_role not in {"skater", "goalie"}:
+            raise ValueError("Role must be 'skater' or 'goalie'")
+        if normalized_player_type not in {"permanent", "substitute"}:
+            raise ValueError("Player type must be 'permanent' or 'substitute'")
+        if default_jersey_number is not None and default_jersey_number < 0:
+            raise ValueError("Jersey number cannot be negative")
+        normalized_season = self._normalize_roster_season(season_label)
+        self.players.edit_player(
+            player_id,
+            normalized_name,
+            normalized_role,
+            normalized_player_type,
+            normalized_season,
+            None if normalized_player_type == "substitute" else default_jersey_number,
+        )
 
     def remove_player(self, player_id: int) -> None:
         self.players.remove_player(player_id)
 
-    def list_active_players(self) -> list[Player]:
-        return self.players.list_active_players()
+    def list_active_players(self, season_label: str | None = None) -> list[Player]:
+        return self.players.list_active_players(self._normalize_roster_season(season_label))
 
     def add_mail_recipient(self, name: str, email: str) -> int:
         normalized_name = name.strip()
@@ -173,7 +250,7 @@ class HockeyService:
 
     def record_game_stats(
         self,
-        season_label: str,
+        season_label: str | None,
         game_date: str,
         opponent: str,
         result: str,
@@ -182,9 +259,10 @@ class HockeyService:
         skater_stats: list[SkaterGameStatInput],
         goalie_stats: list[GoalieGameStatInput],
     ) -> int:
-        self._validate_game_inputs(season_label, game_date, opponent, result, game_type, skater_stats, goalie_stats)
+        normalized_season = self._validated_game_season(season_label, game_date)
+        self._validate_game_inputs(normalized_season, game_date, opponent, result, game_type, skater_stats, goalie_stats)
         game_id = self.games.record_game(
-            season_label=season_label.strip(),
+            season_label=normalized_season,
             game_date=game_date,
             opponent=opponent.strip(),
             result=result,
@@ -193,13 +271,13 @@ class HockeyService:
             skater_stats=skater_stats,
             goalie_stats=goalie_stats,
         )
-        self._auto_send_email(season_label.strip())
+        self._auto_send_email(normalized_season)
         return game_id
 
     def correct_game_stats(
         self,
         game_id: int,
-        season_label: str,
+        season_label: str | None,
         game_date: str,
         opponent: str,
         result: str,
@@ -208,10 +286,20 @@ class HockeyService:
         skater_stats: list[SkaterGameStatInput],
         goalie_stats: list[GoalieGameStatInput],
     ) -> None:
-        self._validate_game_inputs(season_label, game_date, opponent, result, game_type, skater_stats, goalie_stats)
+        existing_game = self.games.get_game_by_id(game_id)
+        if existing_game is None:
+            raise ValueError("Game not found")
+
+        normalized_season = self._validated_game_season(season_label, game_date)
+        if normalized_season != existing_game["season_label"]:
+            raise ValueError(
+                "Changing a game date into a different season is not allowed. Delete the game and re-enter it in the new season."
+            )
+
+        self._validate_game_inputs(normalized_season, game_date, opponent, result, game_type, skater_stats, goalie_stats)
         self.games.correct_game(
             game_id=game_id,
-            season_label=season_label.strip(),
+            season_label=normalized_season,
             game_date=game_date,
             opponent=opponent.strip(),
             result=result,
@@ -220,7 +308,7 @@ class HockeyService:
             skater_stats=skater_stats,
             goalie_stats=goalie_stats,
         )
-        self._auto_send_email(season_label.strip())
+        self._auto_send_email(normalized_season)
 
     def get_last_game(self) -> GameDetail | None:
         return self.games.get_last_game()
@@ -268,6 +356,20 @@ class HockeyService:
         except Exception:
             logger.exception("Auto-email after game save failed")
 
+    def _validated_game_season(self, season_label: str | None, game_date: str) -> str:
+        derived_season = self.derive_season_label(game_date)
+        if season_label and season_label.strip() and season_label.strip() != derived_season:
+            raise ValueError(f"Season is derived from the date and must be '{derived_season}'")
+        return derived_season
+
+    def _normalize_roster_season(self, season_label: str | None) -> str:
+        normalized = (season_label or "").strip()
+        return normalized or self.default_season_label()
+
+    @staticmethod
+    def _format_season_label(start_year: int) -> str:
+        return f"{start_year}-{(start_year + 1) % 100:02d}"
+
     @staticmethod
     def _validate_game_inputs(
         season_label: str,
@@ -292,9 +394,13 @@ class HockeyService:
         for stat in skater_stats:
             if min(stat.goals, stat.assists, stat.pim, stat.shg, stat.ppg) < 0:
                 raise ValueError("Skater stats cannot be negative")
+            if stat.jersey_number is not None and stat.jersey_number < 0:
+                raise ValueError("Skater jersey number cannot be negative")
         for stat in goalie_stats:
             if min(stat.saves, stat.goals_against) < 0:
                 raise ValueError("Goalie stats cannot be negative")
+            if stat.jersey_number is not None and stat.jersey_number < 0:
+                raise ValueError("Goalie jersey number cannot be negative")
 
     @staticmethod
     def _format_summary_email(summary: SeasonSummary) -> str:
@@ -312,14 +418,16 @@ class HockeyService:
                 "Skaters:",
             ]
             for row in block["skaters"]:
+                jersey = f" #{row['jersey_number']}" if row["jersey_number"] is not None else ""
                 lines.append(
-                    f"  {row['player_name']}: G={row['goals']} A={row['assists']} PIM={row['pim']} SHG={row['shg']} PPG={row['ppg']}"
+                    f"  {row['player_name']}{jersey}: G={row['goals']} A={row['assists']} PIM={row['pim']} SHG={row['shg']} PPG={row['ppg']}"
                 )
             lines.append("Goalies:")
             for row in block["goalies"]:
                 sv_display = "N/A" if row["sv_pct"] != row["sv_pct"] else f"{row['sv_pct']:.3f}"
+                jersey = f" #{row['jersey_number']}" if row["jersey_number"] is not None else ""
                 lines.append(
-                    f"  {row['player_name']}: Saves={row['saves']} GA={row['goals_against']} Wins={row['wins']} SV%={sv_display}"
+                    f"  {row['player_name']}{jersey}: Saves={row['saves']} GA={row['goals_against']} Wins={row['wins']} SV%={sv_display}"
                 )
 
         return "\n".join(lines)

@@ -1,0 +1,30 @@
+{% extends "webui/base.html" %}
+{% block content %}
+<section class="card">
+  <h2 style="margin-top:0;">Correct any game</h2>
+  <form method="get" class="form-grid" style="align-items:end;">
+    <div>
+      <label for="{{ form.season_label.id_for_label }}">{{ form.season_label.label }}</label>
+      {{ form.season_label }}
+    </div>
+    <div class="actions" style="justify-content:start;"><button type="submit">Load games</button></div>
+  </form>
+
+  <table>
+    <thead><tr><th>Date</th><th>Opponent</th><th>Type</th><th>Result</th><th></th></tr></thead>
+    <tbody>
+      {% for game in games %}
+      <tr>
+        <td>{{ game.date }}</td>
+        <td>{{ game.opponent }}</td>
+        <td>{{ game.game_type }}</td>
+        <td>{{ game.result }}</td>
+        <td><a class="button-link" href="{% url 'edit-game' game.id %}">Edit</a></td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5" class="muted">No games found for {{ season }}.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

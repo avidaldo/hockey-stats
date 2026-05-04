@@ -1,0 +1,22 @@
+{% extends "webui/base.html" %}
+{% block content %}
+<section class="card">
+  <h2 style="margin-top:0;">Edit {{ player.name }}</h2>
+  <form method="post">
+    {% csrf_token %}
+    <div class="form-grid">
+      {% for field in form %}
+      <div>
+        <label for="{{ field.id_for_label }}">{{ field.label }}</label>
+        {{ field }}
+        {{ field.errors }}
+      </div>
+      {% endfor %}
+    </div>
+    <div class="actions" style="margin-top:1rem;">
+      <a class="button-link secondary" href="{% url 'roster' %}?season={{ season|urlencode }}">Cancel</a>
+      <button type="submit">Save player</button>
+    </div>
+  </form>
+</section>
+{% endblock %}
